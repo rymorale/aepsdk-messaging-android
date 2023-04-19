@@ -48,7 +48,7 @@ dependencies {
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.0'
 
     //implementation "com.adobe.marketing.mobile:core:$rootProject.mavenCoreVersion"
-    implementation(':core')
+    implementation project(':core')
     implementation "com.adobe.marketing.mobile:lifecycle:$rootProject.mavenLifecycleVersion"
     implementation "com.adobe.marketing.mobile:edgeidentity:$rootProject.mavenEdgeIdentityVersion"
     implementation "com.adobe.marketing.mobile:edge:$rootProject.mavenEdgeVersion"

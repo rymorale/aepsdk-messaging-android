@@ -217,7 +217,7 @@ task platformFunctionalTestJacocoReport(type: JacocoReport, dependsOn: "createPh
 
 dependencies {
     //implementation "com.adobe.marketing.mobile:core:$rootProject.mavenCoreVersion"
-    implementation(':core')
+    implementation project(':core')
     implementation "com.adobe.marketing.mobile:edgeidentity:$rootProject.mavenEdgeIdentityVersion"
     implementation "com.adobe.marketing.mobile:edge:$rootProject.mavenEdgeVersion"
 
