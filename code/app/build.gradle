@@ -12,6 +12,7 @@ android {
         versionCode 1
         versionName "2.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        multiDexEnabled true
     }
 
     buildTypes {
@@ -46,11 +47,14 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.4'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.0'
 
-    implementation "com.adobe.marketing.mobile:core:$rootProject.mavenCoreVersion"
+    //implementation "com.adobe.marketing.mobile:core:$rootProject.mavenCoreVersion"
+    implementation(':core')
     implementation "com.adobe.marketing.mobile:lifecycle:$rootProject.mavenLifecycleVersion"
     implementation "com.adobe.marketing.mobile:edgeidentity:$rootProject.mavenEdgeIdentityVersion"
     implementation "com.adobe.marketing.mobile:edge:$rootProject.mavenEdgeVersion"
     implementation "com.adobe.marketing.mobile:assurance:$rootProject.mavenAssuranceVersion"
 
     implementation project(":${rootProject.moduleProjectName}")
+
+    implementation 'com.android.support:multidex:1.0.3'
 }

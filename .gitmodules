@@ -1,0 +1,3 @@
+[submodule "code/aepsdk-core-android"]
+	path = code/aepsdk-core-android
+	url = git@github.com:adobe/aepsdk-core-android.git
