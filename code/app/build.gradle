@@ -49,10 +49,18 @@ dependencies {
 
     //implementation "com.adobe.marketing.mobile:core:$rootProject.mavenCoreVersion"
     implementation project(':core')
-    implementation "com.adobe.marketing.mobile:lifecycle:$rootProject.mavenLifecycleVersion"
-    implementation "com.adobe.marketing.mobile:edgeidentity:$rootProject.mavenEdgeIdentityVersion"
-    implementation "com.adobe.marketing.mobile:edge:$rootProject.mavenEdgeVersion"
-    implementation "com.adobe.marketing.mobile:assurance:$rootProject.mavenAssuranceVersion"
+    implementation ("com.adobe.marketing.mobile:lifecycle:$rootProject.mavenLifecycleVersion") {
+        transitive = false;
+    }
+    implementation ("com.adobe.marketing.mobile:edgeidentity:$rootProject.mavenEdgeIdentityVersion") {
+        transitive = false;
+    }
+    implementation ("com.adobe.marketing.mobile:edge:$rootProject.mavenEdgeVersion") {
+        transitive = false;
+    }
+    implementation ("com.adobe.marketing.mobile:assurance:$rootProject.mavenAssuranceVersion") {
+        transitive = false;
+    }
 
     implementation project(":${rootProject.moduleProjectName}")
 

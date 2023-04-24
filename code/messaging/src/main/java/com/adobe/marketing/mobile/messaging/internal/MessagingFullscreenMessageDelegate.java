@@ -97,14 +97,8 @@ class MessagingFullscreenMessageDelegate implements FullscreenMessageDelegate {
             return false;
         }
 
-        // url decode the query parameters
-        final String queryParams;
-        try {
-            queryParams = URLDecoder.decode(uri.getQuery(), StandardCharsets.UTF_8.toString());
-        } catch (final UnsupportedEncodingException exception) {
-            Log.debug(MessagingConstants.LOG_TAG, SELF_TAG,  "UnsupportedEncodingException occurred when decoding query parameters %s.", uri.getQuery());
-            return false;
-        }
+        // get the url decoded query parameters
+        final String queryParams = uri.getQuery();
 
         // Populate message data
         final Map<String, String> messageData = extractQueryParameters(queryParams);

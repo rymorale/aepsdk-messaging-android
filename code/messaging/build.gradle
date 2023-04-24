@@ -218,8 +218,12 @@ task platformFunctionalTestJacocoReport(type: JacocoReport, dependsOn: "createPh
 dependencies {
     //implementation "com.adobe.marketing.mobile:core:$rootProject.mavenCoreVersion"
     implementation project(':core')
-    implementation "com.adobe.marketing.mobile:edgeidentity:$rootProject.mavenEdgeIdentityVersion"
-    implementation "com.adobe.marketing.mobile:edge:$rootProject.mavenEdgeVersion"
+    implementation ("com.adobe.marketing.mobile:edgeidentity:$rootProject.mavenEdgeIdentityVersion") {
+        transitive = false;
+    }
+    implementation ("com.adobe.marketing.mobile:edge:$rootProject.mavenEdgeVersion") {
+        transitive = false;
+    }
 
     // Firebase sdk compile only
     compileOnly "com.google.firebase:firebase-messaging:21.1.0"
@@ -230,7 +234,6 @@ dependencies {
     testImplementation "org.mockito:mockito-core:${rootProject.ext.mockitoCoreVersion}"
     testImplementation "org.mockito:mockito-inline:${rootProject.ext.mockitoCoreVersion}"
     testImplementation 'org.json:json:20180813'
-
 
     androidTestImplementation "androidx.test.ext:junit:${rootProject.ext.junitVersion}"
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'

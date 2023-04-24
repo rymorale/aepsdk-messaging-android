@@ -27,7 +27,7 @@ class MessagingApplication : Application() {
         Identity.registerExtension()
         Edge.registerExtension()
         Assurance.registerExtension()
-        //Assurance.startSession("YOUR-SESSION-ID")
+        //Assurance.startSession("ryan://?adb_validation_sessionid=d1e7b533-1af9-463b-835d-4b4a028e8cd2")
 
         MobileCore.start {
             // Necessary property id which has the edge configuration id needed by aep sdk
