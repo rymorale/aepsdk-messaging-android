@@ -99,12 +99,6 @@ class MessagingFullscreenMessageDelegate implements FullscreenMessageDelegate {
             return false;
         }
 
-        // get the url decoded query parameters
-        final String queryParams = uri.getQuery();
-
-        // Populate message data
-        final Map<String, String> messageData = extractQueryParameters(queryParams);
-
         final MessageSettings messageSettings = fullscreenMessage.getMessageSettings();
         final Message message = (Message) messageSettings.getParent();
 
