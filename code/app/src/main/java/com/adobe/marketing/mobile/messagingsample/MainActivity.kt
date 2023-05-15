@@ -33,8 +33,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.adobe.marketing.mobile.*
+import com.adobe.marketing.mobile.messaging.internal.MessagingAlertListener
 import com.adobe.marketing.mobile.services.MessagingDelegate
+import com.adobe.marketing.mobile.services.ServiceProvider
 import com.adobe.marketing.mobile.services.ui.FullscreenMessage
+import com.adobe.marketing.mobile.services.ui.Showable
 import com.adobe.marketing.mobile.util.StringUtils
 import kotlinx.android.synthetic.main.activity_main.*
 import org.json.JSONObject
@@ -278,32 +281,32 @@ class MainActivity : ComponentActivity() {
                     this@MainActivity, "Empty or default trigger string provided. Triggering default message.",
                     Toast.LENGTH_SHORT
                 ).show()
-                MobileCore.trackAction("samus", null)
+                MobileCore.trackAction("lorem", null)
             } else {
                 MobileCore.trackAction(trigger, null)
             }
         }
 
         btnHistoricalEvent1.setOnClickListener {
-            val triggerEvent1 =
-                    Event.Builder("messaging event 1", "iamtest", "iamtest", arrayOf("firstEvent"))
-                            .let {
-                                val eventData: HashMap<String, Any?> = hashMapOf("firstEvent" to "true")
-                                it.setEventData(eventData)
-                                it.build()
-                            }
-            MobileCore.dispatchEvent(triggerEvent1, null)
+           val alertMessage = AlertMessage.Builder(this, "defaultButton", "alert")
+               .setDefaultButtonUrl("https://www.adobe.com")
+               .setCancelButton("cancel")
+               .setCancelButtonUrl("https://www.google.com")
+               .setMessage("this is a mock alert message")
+               .setTitle("mock title")
+               .build()
+            alertMessage.show()
         }
 
         btnHistoricalEvent2.setOnClickListener {
-            val triggerEvent2 =
-                    Event.Builder("messaging event 2", "iamtest", "iamtest", arrayOf("secondEvent"))
-                            .let {
-                                val eventData: HashMap<String, Any?> = hashMapOf("secondEvent" to "true")
-                                it.setEventData(eventData)
-                                it.build()
-                            }
-            MobileCore.dispatchEvent(triggerEvent2, null)
+            val bottomSheetAlert = AlertMessage.Builder(this, "defaultButton", "actionSheet")
+                .setDefaultButtonUrl("https://www.adobe.com")
+                .setCancelButton("cancel")
+                .setCancelButtonUrl("https://www.google.com")
+                .setMessage("this is a mock alert message")
+                .setTitle("mock title")
+                .build()
+            bottomSheetAlert.show()
         }
 
         btnHistoricalEvent3.setOnClickListener {
@@ -332,10 +335,6 @@ class MainActivity : ComponentActivity() {
                     Toast.LENGTH_SHORT
             ).show()
             customMessagingDelegate.getLastTriggeredMessage()?.show()
-        }
-
-        btnRefreshInAppMessages.setOnClickListener {
-            Messaging.refreshInAppMessages()
         }
     }
 
@@ -536,13 +535,71 @@ class MainActivity : ComponentActivity() {
 
 class CustomDelegate : MessagingDelegate {
     private var currentMessage: Message? = null
+    private var currentAlert: AlertMessage? = null
     private var webview: WebView? = null
     var showMessages = true
 
-    override fun shouldShowMessage(fullscreenMessage: FullscreenMessage?): Boolean {
+//    override fun shouldShowMessage(message: FullscreenMessage?): Boolean {
+//        // access to the whole message from the parent
+//        message?.also {
+//            this.currentMessage = message.parent as? Message?
+//            this.webview = currentMessage?.webView
+//
+//            // example: setting a javascript handler on the webview to retrieve javascript output from the loaded in-app html
+//            // sample html script:
+//            // <script>
+//            // function getText() {
+//            // var textBox = document.getElementById("myText");
+//            // var textValue = textBox.value;
+//            // myInappCallback.run(textValue);
+//            // window.location.href = "adbinapp://dismiss";
+//            // }
+//            // </script>
+//            currentMessage?.handleJavascriptMessage("myInappCallback") { content ->
+//                if (content != null) {
+//                    println("Javascript handler content: $content")
+//                    currentMessage?.track(content, MessagingEdgeEventType.IN_APP_INTERACT)
+//                }
+//            }
+//
+//            // if we're not showing the message now, we can save it for later
+//            if(!showMessages) {
+//                println("message was suppressed: ${currentMessage?.id}")
+//                currentMessage?.track("message suppressed", MessagingEdgeEventType.IN_APP_TRIGGER)
+//            }
+//        }
+//        return showMessages
+//    }
+//
+//    override fun onShow(message: FullscreenMessage?) {
+//        this.currentMessage = message?.parent as? Message?
+//        this.webview = currentMessage?.webView
+//
+//        // example: running javascript on the webview created by the Messaging extension.
+//        // running javascript content must be done on the ui thread
+//        webview?.post {
+//            webview?.evaluateJavascript("(function() { return 'function return value'; })();") { content ->
+//                if (content != null) {
+//                    println("js function return content is: $content")
+//                }
+//            }
+//        }
+//    }
+//
+//    override fun onDismiss(message: FullscreenMessage?) {
+//        this.currentMessage = message?.parent as? Message?
+//    }
+
+    override fun shouldShowMessage(message: Showable?): Boolean {
         // access to the whole message from the parent
-        fullscreenMessage?.also {
-            this.currentMessage = (fullscreenMessage.parent) as? Message
+        message?.also {
+            if (message is Message) {
+                val fullscreenMessage = message as FullscreenMessage
+                this.currentMessage = fullscreenMessage.parent as? Message?
+            } else if (message is AlertMessage) {
+                this.currentAlert = message
+            }
+
             this.webview = currentMessage?.webView
 
             // example: setting a javascript handler on the webview to retrieve javascript output from the loaded in-app html
@@ -571,9 +628,14 @@ class CustomDelegate : MessagingDelegate {
         return showMessages
     }
 
-    override fun onShow(fullscreenMessage: FullscreenMessage?) {
-        this.currentMessage = fullscreenMessage?.parent as Message?
-        this.webview = currentMessage?.webView
+    override fun onShow(message: Showable?) {
+        if (message is Message) {
+            val fullscreenMessage = message as FullscreenMessage
+            this.currentMessage = fullscreenMessage.parent as? Message?
+            this.webview = currentMessage?.webView
+        } else if (message is AlertMessage) {
+            this.currentAlert = message
+        }
 
         // example: running javascript on the webview created by the Messaging extension.
         // running javascript content must be done on the ui thread
@@ -586,11 +648,21 @@ class CustomDelegate : MessagingDelegate {
         }
     }
 
-    override fun onDismiss(fullscreenMessage: FullscreenMessage?) {
-        this.currentMessage = fullscreenMessage?.parent as Message?
+    override fun onDismiss(message: Showable?) {
+        if (message is Message) {
+            val fullscreenMessage = message as FullscreenMessage
+            this.currentMessage = fullscreenMessage.parent as? Message?
+        } else if (message is AlertMessage) {
+            this.currentAlert = message
+        }
     }
 
-    fun getLastTriggeredMessage(): Message? {
-        return currentMessage
+    @Deprecated("Deprecated in Java", ReplaceWith("true"))
+    override fun shouldShowMessage(message: FullscreenMessage?): Boolean {
+        TODO("Not yet implemented")
+    }
+
+    fun getLastTriggeredMessage(): Showable? {
+        return currentAlert
     }
 }
