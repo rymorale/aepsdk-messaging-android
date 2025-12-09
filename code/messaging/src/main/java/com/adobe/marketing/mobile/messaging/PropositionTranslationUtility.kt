@@ -81,6 +81,7 @@ internal class PropositionTranslationUtility {
     private var translator: Translator? = null
     private var isTranslationEnabled = false
     private var targetLanguageCode: String? = null
+    private val cacheManager = TranslationModelCacheManager()
     
     /**
      * Initializes the translation utility by detecting the device locale and downloading the
@@ -222,6 +223,10 @@ internal class PropositionTranslationUtility {
                             "Translation model for language '$targetLanguageCode' is already cached"
                         )
                         isTranslationEnabled = true
+                        
+                        // Record access to update LRU cache
+                        cacheManager.recordModelAccess(targetLanguageCode!!)
+                        
                         InitializationResult(
                             InitializationStatus.SUCCESS_MODEL_CACHED,
                             languageCode = targetLanguageCode,
@@ -234,6 +239,21 @@ internal class PropositionTranslationUtility {
                             SELF_TAG,
                             "Translation model not found, starting download for language: $targetLanguageCode"
                         )
+                        
+                        // Clean up old models if cache limit reached
+                        Log.debug(
+                            MessagingConstants.LOG_TAG,
+                            SELF_TAG,
+                            "Checking cache limit before download..."
+                        )
+                        val cleanupSuccess = cacheManager.cleanupOldModelsIfNeeded(targetLanguageCode!!)
+                        if (!cleanupSuccess) {
+                            Log.warning(
+                                MessagingConstants.LOG_TAG,
+                                SELF_TAG,
+                                "Cache cleanup had issues, but proceeding with download"
+                            )
+                        }
                         
                         // Notify that download is starting
                         progressCallback?.onDownloadStarted(targetLanguageCode!!)
@@ -252,6 +272,10 @@ internal class PropositionTranslationUtility {
                                 "Translation model downloaded successfully for language: $targetLanguageCode"
                             )
                             isTranslationEnabled = true
+                            
+                            // Record the newly downloaded model
+                            cacheManager.recordModelAccess(targetLanguageCode!!)
+                            
                             InitializationResult(
                                 InitializationStatus.SUCCESS_MODEL_DOWNLOADED,
                                 languageCode = targetLanguageCode,
