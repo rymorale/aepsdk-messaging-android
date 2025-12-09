@@ -40,6 +40,9 @@ aepLibrary {
         addMavenDependency("androidx.compose.runtime", "runtime", BuildConstants.Versions.COMPOSE)
         addMavenDependency("androidx.activity", "activity-compose", BuildConstants.Versions.ANDROIDX_ACTIVITY_COMPOSE)
         addMavenDependency("androidx.compose.material3", "material3", material3Version)
+        addMavenDependency("com.google.mlkit", "translate", "17.0.3")
+        addMavenDependency("org.jetbrains.kotlinx", "kotlinx-coroutines-android", "1.7.3")
+        addMavenDependency("org.jetbrains.kotlinx", "kotlinx-coroutines-play-services", "1.7.3")
     }
 
     android {
@@ -66,6 +69,9 @@ dependencies {
     implementation("androidx.compose.material3:material3:$material3Version")
 
     compileOnly("com.google.firebase:firebase-messaging:23.4.1")
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     // testImplementation dependencies provided by aep-library:
     // MOCKITO_CORE, MOCKITO_INLINE, JSON

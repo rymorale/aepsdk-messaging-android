@@ -13,9 +13,15 @@
 package com.adobe.marketing.mobile.messagingsample;
 
 import androidx.appcompat.app.AppCompatActivity;
+import android.content.Context;
 import android.os.Bundle;
 
 public class ThirdLevelActivity extends AppCompatActivity {
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.INSTANCE.onAttach(newBase));
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

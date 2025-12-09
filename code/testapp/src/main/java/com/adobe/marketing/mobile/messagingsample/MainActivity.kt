@@ -55,6 +55,11 @@ class MainActivity : ComponentActivity() {
         private const val LOG_TAG = "MainActivity"
         const val FROM = "from"
     }
+    
+    override fun attachBaseContext(newBase: Context) {
+        // Apply the persisted locale when activity is created
+        super.attachBaseContext(LocaleHelper.onAttach(newBase))
+    }
 
     private fun askNotificationPermission() {
         // This is only necessary for API level >= 33 (TIRAMISU)
@@ -132,6 +137,47 @@ class MainActivity : ComponentActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun showLocaleSelectionDialog() {
+        val localeNames = LocaleHelper.getAllLocaleNames()
+        val localeCodes = LocaleHelper.getAllLocaleCodes()
+        val currentLocale = LocaleHelper.getCurrentLocale(this)
+        
+        // Find current selection
+        val currentSelection = localeCodes.indexOf(currentLocale).takeIf { it >= 0 } ?: 0
+        
+        AlertDialog.Builder(this)
+            .setTitle("Select Locale for Translation Testing")
+            .setSingleChoiceItems(localeNames, currentSelection) { dialog, which ->
+                val selectedLocale = localeCodes[which]
+                
+                // Apply the locale
+                LocaleHelper.setLocale(this, selectedLocale)
+                
+                // Show confirmation
+                Toast.makeText(
+                    this,
+                    "Locale changed to ${localeNames[which]}. Restarting app...",
+                    Toast.LENGTH_SHORT
+                ).show()
+                
+                dialog.dismiss()
+                
+                // Restart the app to apply locale changes
+                android.os.Handler(mainLooper).postDelayed({
+                    LocaleHelper.restartApp(this)
+                }, 500)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+    
+    private fun updateLocaleDisplay() {
+        val currentLocale = LocaleHelper.getCurrentLocale(this)
+        val currentLocaleName = LocaleHelper.TestLocale.fromLanguageCode(currentLocale)?.displayName 
+            ?: "Unknown"
+        binding.tvCurrentLocale.text = "Current Locale: $currentLocaleName"
     }
 
     private enum class generatedIAMSpinnerValues(val value: String) {
@@ -250,6 +296,9 @@ class MainActivity : ComponentActivity() {
 
     var propositions = mutableListOf<Proposition>()
     private lateinit var binding: ActivityMainBinding
+    private val statusUpdateHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var statusUpdateRunnable: Runnable? = null
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -261,6 +310,12 @@ class MainActivity : ComponentActivity() {
         setupButtonClickListeners()
         // setupSpinnerItemSelectedListener()
         setupSwitchListeners()
+        
+        // Start monitoring translation status from Application
+        startTranslationStatusMonitoring()
+        
+        // Update current locale display
+        updateLocaleDisplay()
 
         // handle push notification interactions
         intent?.extras?.apply {
@@ -275,7 +330,81 @@ class MainActivity : ComponentActivity() {
         askNotificationPermission()
     }
 
+    private fun startTranslationStatusMonitoring() {
+        // Poll for status updates from the Application
+        statusUpdateRunnable = object : Runnable {
+            private var lastStatus: MessagingApplication.TranslationStatus? = null
+            private var lastLanguageCode: String? = null
+            
+            override fun run() {
+                val currentStatus = MessagingApplication.translationStatus
+                val currentLanguageCode = MessagingApplication.translationLanguageCode
+                
+                // Only update UI if status changed
+                if (currentStatus != lastStatus || currentLanguageCode != lastLanguageCode) {
+                    lastStatus = currentStatus
+                    lastLanguageCode = currentLanguageCode
+                    
+                    when (currentStatus) {
+                        MessagingApplication.TranslationStatus.INITIALIZING -> {
+                            updateTranslationStatus(
+                                TranslationStatusIndicator.Status.NOT_CACHED, 
+                                "Initializing..."
+                            )
+                        }
+                        MessagingApplication.TranslationStatus.CHECKING_CACHE -> {
+                            updateTranslationStatus(
+                                TranslationStatusIndicator.Status.NOT_CACHED, 
+                                "Checking cache..."
+                            )
+                        }
+                        MessagingApplication.TranslationStatus.DOWNLOADING -> {
+                            updateTranslationStatus(
+                                TranslationStatusIndicator.Status.DOWNLOADING, 
+                                "Downloading (${currentLanguageCode ?: "..."})..."
+                            )
+                        }
+                        MessagingApplication.TranslationStatus.READY -> {
+                            updateTranslationStatus(
+                                TranslationStatusIndicator.Status.READY, 
+                                "Ready (${currentLanguageCode ?: "unknown"})"
+                            )
+                        }
+                        MessagingApplication.TranslationStatus.DISABLED -> {
+                            updateTranslationStatus(
+                                TranslationStatusIndicator.Status.DISABLED, 
+                                "Disabled"
+                            )
+                        }
+                    }
+                }
+                
+                // Schedule next update
+                statusUpdateHandler.postDelayed(this, 250) // Check every 250ms
+            }
+        }
+        
+        // Start monitoring
+        statusUpdateRunnable?.let { statusUpdateHandler.post(it) }
+    }
+    
+    private fun stopTranslationStatusMonitoring() {
+        statusUpdateRunnable?.let { statusUpdateHandler.removeCallbacks(it) }
+        statusUpdateRunnable = null
+    }
+    
+    private fun updateTranslationStatus(status: TranslationStatusIndicator.Status, statusText: String) {
+        runOnUiThread {
+            binding.translationStatusIndicator.setStatus(status)
+            binding.tvTranslationStatus.text = "Translation: $statusText"
+        }
+    }
+    
     private fun setupButtonClickListeners() {
+        binding.btnChangeLocale.setOnClickListener {
+            showLocaleSelectionDialog()
+        }
+        
         binding.btnGetLocalNotification.setOnClickListener {
             scheduleNotification(getNotification("Click on the notification for tracking"), 1000)
         }
@@ -427,11 +556,20 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         MobileCore.lifecycleStart(null)
+        // Restart status monitoring when activity resumes
+        startTranslationStatusMonitoring()
     }
 
     override fun onPause() {
         super.onPause()
         MobileCore.lifecyclePause()
+        // Stop status monitoring when activity pauses
+        stopTranslationStatusMonitoring()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        stopTranslationStatusMonitoring()
     }
 
     // local AJO proposition event generation for testing

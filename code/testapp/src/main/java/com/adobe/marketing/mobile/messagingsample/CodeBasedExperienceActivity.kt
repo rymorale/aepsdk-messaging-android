@@ -24,6 +24,10 @@ import com.adobe.marketing.mobile.messagingsample.databinding.ActivityCodebasedB
 class CodeBasedExperienceActivity : AppCompatActivity() {
     private lateinit var binding: ActivityCodebasedBinding
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityCodebasedBinding.inflate(layoutInflater)

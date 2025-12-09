@@ -16,4 +16,10 @@
     <color name="colorPrimary">#008577</color>
     <color name="colorPrimaryDark">#00574B</color>
     <color name="colorAccent">#D81B60</color>
+    
+    <!-- Translation Status Indicator Colors -->
+    <color name="translationStatusNotCached">#F44336</color> <!-- Red -->
+    <color name="translationStatusDownloading">#FF9800</color> <!-- Orange -->
+    <color name="translationStatusReady">#4CAF50</color> <!-- Green -->
+    <color name="translationStatusDisabled">#9E9E9E</color> <!-- Gray -->
 </resources>

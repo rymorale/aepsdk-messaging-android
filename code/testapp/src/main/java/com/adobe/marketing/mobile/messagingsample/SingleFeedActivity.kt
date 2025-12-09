@@ -21,6 +21,10 @@ import com.adobe.marketing.mobile.util.DataReader
 
 class SingleFeedActivity : AppCompatActivity() {
 
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_singlefeed)

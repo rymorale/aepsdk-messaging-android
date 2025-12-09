@@ -18,6 +18,10 @@ import android.widget.Button
 import androidx.activity.ComponentActivity
 
 class SecondLevelActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_second_level)

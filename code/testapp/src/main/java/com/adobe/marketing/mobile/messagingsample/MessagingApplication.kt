@@ -12,6 +12,7 @@
 package com.adobe.marketing.mobile.messagingsample
 
 import android.app.Application
+import android.util.Log
 import com.adobe.marketing.mobile.Assurance
 import com.adobe.marketing.mobile.Edge
 import com.adobe.marketing.mobile.Messaging
@@ -19,6 +20,8 @@ import com.adobe.marketing.mobile.MobileCore
 import com.adobe.marketing.mobile.LoggingMode
 import com.adobe.marketing.mobile.Lifecycle
 import com.adobe.marketing.mobile.edge.identity.Identity
+import com.adobe.marketing.mobile.messaging.TranslationStatusCallback
+import com.adobe.marketing.mobile.messaging.TranslationStatusMonitor
 
 class MessagingApplication : Application() {
     private val ENVIRONMENT_FILE_ID = "3149c49c3910/4f6b2fbf2986/launch-7d78a5fd1de3-development"
@@ -26,11 +29,36 @@ class MessagingApplication : Application() {
     private val STAGING_APP_ID = "staging/1b50a869c4a2/bcd1a623883f/launch-e44d085fc760-development"
     private val STAGING = false
 
+    companion object {
+        private const val LOG_TAG = "MessagingApplication"
+        
+        // Store translation status to be accessed by activities
+        @Volatile
+        var translationStatus: TranslationStatus = TranslationStatus.INITIALIZING
+            private set
+        
+        @Volatile
+        var translationLanguageCode: String? = null
+            private set
+    }
+    
+    enum class TranslationStatus {
+        INITIALIZING,
+        CHECKING_CACHE,
+        DOWNLOADING,
+        READY,
+        DISABLED
+    }
+
     override fun onCreate() {
         super.onCreate()
 
         MobileCore.setApplication(this)
         MobileCore.setLogLevel(LoggingMode.VERBOSE)
+        
+        // Set up translation status monitoring BEFORE registering extensions
+        setupTranslationStatusMonitoring()
+        
         val extensions = listOf(Messaging.EXTENSION, Identity.EXTENSION, Lifecycle.EXTENSION, Edge.EXTENSION, Assurance.EXTENSION)
         MobileCore.registerExtensions(extensions) {
             // Necessary property id which has the edge configuration id needed by aep sdk
@@ -49,5 +77,43 @@ class MessagingApplication : Application() {
             MobileCore.updateConfiguration(configMap)
         }
         // Assurance.startSession(ASSURANCE_SESSION_ID)
+    }
+    
+    private fun setupTranslationStatusMonitoring() {
+        TranslationStatusMonitor.setStatusCallback(object : TranslationStatusCallback {
+            override fun onTranslationInitializationStarted() {
+                Log.d(LOG_TAG, "Translation initialization started")
+                translationStatus = TranslationStatus.INITIALIZING
+            }
+            
+            override fun onCheckingModelCache() {
+                Log.d(LOG_TAG, "Checking model cache")
+                translationStatus = TranslationStatus.CHECKING_CACHE
+            }
+            
+            override fun onModelFoundInCache(languageCode: String) {
+                Log.d(LOG_TAG, "Translation model found in cache for language: $languageCode")
+                translationStatus = TranslationStatus.READY
+                translationLanguageCode = languageCode
+            }
+            
+            override fun onModelDownloadStarted(languageCode: String) {
+                Log.d(LOG_TAG, "Translation model download started for language: $languageCode")
+                translationStatus = TranslationStatus.DOWNLOADING
+                translationLanguageCode = languageCode
+            }
+            
+            override fun onModelDownloadedSuccessfully(languageCode: String) {
+                Log.d(LOG_TAG, "Translation model downloaded successfully for language: $languageCode")
+                translationStatus = TranslationStatus.READY
+                translationLanguageCode = languageCode
+            }
+            
+            override fun onTranslationInitializationFailed(reason: String) {
+                Log.d(LOG_TAG, "Translation initialization failed: $reason")
+                translationStatus = TranslationStatus.DISABLED
+                translationLanguageCode = null
+            }
+        })
     }
 }

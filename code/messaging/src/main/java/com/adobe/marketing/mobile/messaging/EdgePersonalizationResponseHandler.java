@@ -87,6 +87,10 @@ class EdgePersonalizationResponseHandler {
 
     private SerialWorkDispatcher<Event> serialWorkDispatcher;
 
+    // Translation manager for translating proposition content to device locale
+    private final PropositionTranslationManager translationManager =
+            new PropositionTranslationManager();
+
     /**
      * Constructor
      *
@@ -118,6 +122,13 @@ class EdgePersonalizationResponseHandler {
         this.extensionApi = extensionApi;
         this.launchRulesEngine = rulesEngine;
         this.contentCardRulesEngine = contentCardRulesEngine;
+
+        // enable translation for propositions
+        // Set up callback from the monitor if one has been registered
+        this.translationManager.setTranslationStatusCallback(
+                TranslationStatusMonitor.getStatusCallback()
+        );
+        this.translationManager.enableTranslation();
 
         // load cached propositions (if any) when EdgePersonalizationResponseHandler is instantiated
         this.messagingCacheUtilities =
@@ -1010,15 +1021,22 @@ class EdgePersonalizationResponseHandler {
         if (propositionItem == null) {
             return;
         }
+
+        // translate the proposition item
+        final PropositionItem translatedPropositionItem = translationManager.translatePropositionItem(propositionItem);
+        if (translatedPropositionItem == null) {
+            return;
+        }
+
         try {
             final PresentableMessageMapper.InternalMessage message =
                     (PresentableMessageMapper.InternalMessage)
                             PresentableMessageMapper.getInstance()
                                     .createMessage(
                                             parent,
-                                            propositionItem,
+                                            translatedPropositionItem,
                                             messagingCacheUtilities.getAssetsMap(),
-                                            propositionInfo.get(propositionItem.getItemId()));
+                                            propositionInfo.get(translatedPropositionItem.getItemId()));
             message.trigger();
             message.show();
         } catch (final MessageRequiredFieldMissingException | IllegalStateException exception) {
@@ -1105,5 +1123,33 @@ class EdgePersonalizationResponseHandler {
     @VisibleForTesting
     Map<Surface, List<Proposition>> getQualifiedContentCardsBySurface() {
         return contentCardsBySurface;
+    }
+
+    /**
+     * Enables automatic translation of proposition content from English to the device's native
+     * language using ML Kit Translation API.
+     *
+     * <p>This method should be called early in the application lifecycle to allow time for the
+     * translation model to download. Translation will only occur if:
+     *
+     * <ul>
+     *   <li>The device locale is not English
+     *   <li>The device language is supported by ML Kit Translation
+     *   <li>The translation model downloads successfully
+     * </ul>
+     *
+     * <p>Note: Language models are approximately 30MB and will only be downloaded over Wi-Fi.
+     */
+    @VisibleForTesting
+    void enablePropositionTranslation() {
+        translationManager.enableTranslation();
+    }
+
+    /**
+     * Disables automatic translation of proposition content and releases translation resources.
+     */
+    @VisibleForTesting
+    void disablePropositionTranslation() {
+        translationManager.disableTranslation();
     }
 }
