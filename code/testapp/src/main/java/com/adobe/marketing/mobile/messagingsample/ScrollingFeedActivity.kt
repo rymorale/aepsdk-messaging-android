@@ -16,6 +16,7 @@ import android.util.Log
 import android.widget.ImageButton
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -87,7 +88,7 @@ class ScrollingFeedActivity : AppCompatActivity() {
         // surface for content card -
         // mobileapp://com.adobe.marketing.mobile.messagingsample/card/ms
         val surfaces = mutableListOf<Surface>()
-        val surface = Surface("largeAndImageOnlyCards")
+        val surface = Surface("translate")
         surfaces.add(surface)
 
         // Initialize the ContentCardUIProvider
@@ -234,7 +235,7 @@ class ScrollingFeedActivity : AppCompatActivity() {
             .build()
 
         // Create row with composables from AepUI instances
-        LazyRow {
+        LazyColumn(Modifier.fillMaxWidth(1f)) {
             items(reorderedAepUIList) { aepUI ->
                 when (aepUI) {
                     is SmallImageUI -> {

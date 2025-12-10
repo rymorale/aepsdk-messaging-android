@@ -38,6 +38,7 @@ class CodeBasedExperienceActivity : AppCompatActivity() {
         val surfaces = mutableListOf<Surface>()
         surfaces.add(Surface("cbe/json"))
         surfaces.add(Surface("android-cbe-preview"))
+        surfaces.add(Surface("cbetranslate"))
 
         // fetch code based experiences
         Messaging.updatePropositionsForSurfaces(surfaces)

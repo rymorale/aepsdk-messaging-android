@@ -815,19 +815,23 @@ class EdgePersonalizationResponseHandler {
         List<PropositionItem> newPropositionItems = new ArrayList<>();
 
         for (final Proposition proposition : propositions) {
-            if (existingPropositionsArray.contains(proposition)) {
-                existingPropositionsArray.remove(proposition);
+            // Translate content card proposition items before storing
+            final Proposition translatedProposition = translateContentCardProposition(proposition);
+            
+            if (existingPropositionsArray.contains(translatedProposition)) {
+                existingPropositionsArray.remove(translatedProposition);
             } else {
-                final List<PropositionItem> propItems = proposition.getItems();
+                final List<PropositionItem> propItems = translatedProposition.getItems();
                 if (!propItems.isEmpty()) {
                     newPropositionItems.add(propItems.get(0));
                 }
             }
-            existingPropositionsArray.add(proposition);
+            existingPropositionsArray.add(translatedProposition);
 
             // store qualified content cards as schema data in the ContentCardMapper for later use
+            // using the translated proposition item
             final ContentCardSchemaData propositionAsContentCard =
-                    proposition.getItems().get(0).getContentCardSchemaData();
+                    translatedProposition.getItems().get(0).getContentCardSchemaData();
             ContentCardMapper.getInstance().storeContentCardSchemaData(propositionAsContentCard);
         }
 
@@ -855,6 +859,50 @@ class EdgePersonalizationResponseHandler {
                                     "User has not qualified for any content card(s) for surface %s",
                                     surface.getUri());
             Log.trace(MessagingConstants.LOG_TAG, SELF_TAG, message);
+        }
+    }
+    
+    /**
+     * Translates content card proposition items from English to the device's native language.
+     * Only translates the title and body content fields, preserving all other fields.
+     *
+     * @param proposition the {@link Proposition} to translate
+     * @return a new {@link Proposition} with translated content, or the original if translation
+     *     fails or is not enabled
+     */
+    private Proposition translateContentCardProposition(final Proposition proposition) {
+        if (proposition == null || proposition.getItems().isEmpty()) {
+            return proposition;
+        }
+
+        try {
+            final List<PropositionItem> translatedItems = new ArrayList<>();
+            for (final PropositionItem item : proposition.getItems()) {
+                // Translate the proposition item (handles nested maps like title.content, body.content)
+                final PropositionItem translatedItem = translationManager.translatePropositionItem(item);
+                translatedItems.add(translatedItem != null ? translatedItem : item);
+            }
+
+            // Create a new Proposition with translated items
+            return new Proposition(
+                    proposition.getUniqueId(),
+                    proposition.getScope(),
+                    proposition.getScopeDetails(),
+                    translatedItems);
+        } catch (final MessageRequiredFieldMissingException e) {
+            Log.warning(
+                    MessagingConstants.LOG_TAG,
+                    SELF_TAG,
+                    "Failed to create translated content card proposition, required field missing: %s",
+                    e.getLocalizedMessage());
+            return proposition;
+        } catch (final Exception e) {
+            Log.warning(
+                    MessagingConstants.LOG_TAG,
+                    SELF_TAG,
+                    "Failed to translate content card proposition: %s",
+                    e.getLocalizedMessage());
+            return proposition;
         }
     }
 
@@ -982,9 +1030,21 @@ class EdgePersonalizationResponseHandler {
     private void updatePropositions(
             final Map<Surface, List<Proposition>> newPropositions,
             final List<Surface> surfacesToRemove) {
+        // Translate code-based experiences before storing
+        final Map<Surface, List<Proposition>> translatedPropositions = new HashMap<>();
+        for (final Map.Entry<Surface, List<Proposition>> entry : newPropositions.entrySet()) {
+            final List<Proposition> translatedList = new ArrayList<>();
+            for (final Proposition proposition : entry.getValue()) {
+                // Translate code-based experiences (HTML_CONTENT and JSON_CONTENT)
+                final Proposition translatedProposition = translateCodeBasedExperience(proposition);
+                translatedList.add(translatedProposition);
+            }
+            translatedPropositions.put(entry.getKey(), translatedList);
+        }
+        
         // add new surfaces or replace existing surfaces
         Map<Surface, List<Proposition>> tempPropositionsMap = new HashMap<>(inMemoryPropositions);
-        tempPropositionsMap.putAll(newPropositions);
+        tempPropositionsMap.putAll(translatedPropositions);
 
         // remove any surfaces if necessary
         for (final Surface surface : surfacesToRemove) {
@@ -992,6 +1052,58 @@ class EdgePersonalizationResponseHandler {
         }
 
         inMemoryPropositions = tempPropositionsMap;
+    }
+    
+    /**
+     * Translates code-based experience propositions from English to the device's native language.
+     * Only translates propositions with HTML_CONTENT or JSON_CONTENT schema types.
+     * Other proposition types (INAPP, CONTENT_CARD) are handled separately and returned unchanged.
+     *
+     * @param proposition the {@link Proposition} to translate
+     * @return a new {@link Proposition} with translated content, or the original if translation
+     *     fails, is not enabled, or is not a code-based experience
+     */
+    private Proposition translateCodeBasedExperience(final Proposition proposition) {
+        if (proposition == null || proposition.getItems().isEmpty()) {
+            return proposition;
+        }
+
+        // Only translate code-based experiences (HTML_CONTENT and JSON_CONTENT)
+        // INAPP and CONTENT_CARD are handled separately in their respective flows
+        final SchemaType schemaType = proposition.getItems().get(0).getSchema();
+        if (schemaType != SchemaType.HTML_CONTENT && schemaType != SchemaType.JSON_CONTENT) {
+            return proposition;
+        }
+
+        try {
+            final List<PropositionItem> translatedItems = new ArrayList<>();
+            for (final PropositionItem item : proposition.getItems()) {
+                // Translate the proposition item
+                final PropositionItem translatedItem = translationManager.translatePropositionItem(item);
+                translatedItems.add(translatedItem != null ? translatedItem : item);
+            }
+
+            // Create a new Proposition with translated items
+            return new Proposition(
+                    proposition.getUniqueId(),
+                    proposition.getScope(),
+                    proposition.getScopeDetails(),
+                    translatedItems);
+        } catch (final MessageRequiredFieldMissingException e) {
+            Log.warning(
+                    MessagingConstants.LOG_TAG,
+                    SELF_TAG,
+                    "Failed to create translated code-based experience proposition, required field missing: %s",
+                    e.getLocalizedMessage());
+            return proposition;
+        } catch (final Exception e) {
+            Log.warning(
+                    MessagingConstants.LOG_TAG,
+                    SELF_TAG,
+                    "Failed to translate code-based experience proposition: %s",
+                    e.getLocalizedMessage());
+            return proposition;
+        }
     }
 
     /**

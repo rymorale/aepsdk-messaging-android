@@ -388,20 +388,69 @@ internal class PropositionTranslationUtility {
     
     /**
      * Recursively translates all string values in a Map.
+     * Skips fields that contain URLs or other non-translatable content.
      *
      * @param map the map to translate
      * @return a new map with translated values
      */
     private fun translateMap(map: Map<String, Any?>): Map<String, Any?> {
-        return map.mapValues { (_, value) ->
+        return map.mapValues { (key, value) ->
             when (value) {
                 null -> null
-                is String -> translateText(value)
+                is String -> {
+                    // Skip translation for URL fields and other non-translatable fields
+                    if (shouldSkipTranslation(key, value)) {
+                        value
+                    } else {
+                        translateText(value)
+                    }
+                }
                 is Map<*, *> -> translateMap(value as Map<String, Any?>)
                 is List<*> -> translateList(value as List<Any?>)
                 else -> value // Keep other types as-is (numbers, booleans, etc.)
             }
         }
+    }
+    
+    /**
+     * Determines if a field should be skipped during translation.
+     * Returns true for URLs, styles, IDs, and other non-user-facing content.
+     *
+     * @param key the field name
+     * @param value the field value
+     * @return true if the field should not be translated
+     */
+    private fun shouldSkipTranslation(key: String, value: String): Boolean {
+        // Skip if the key indicates a URL or non-translatable field
+        val urlKeywords = listOf("url", "uri", "href", "src", "link", "actionurl")
+        val nonTranslatableKeywords = listOf("id", "style", "type", "format", "schema")
+        
+        val lowerKey = key.lowercase()
+        
+        // Check if key contains URL-related keywords
+        if (urlKeywords.any { lowerKey.contains(it) }) {
+            return true
+        }
+        
+        // Check if key contains non-translatable keywords
+        if (nonTranslatableKeywords.any { lowerKey.contains(it) }) {
+            return true
+        }
+        
+        // Skip if the value looks like a URL (starts with http://, https://, or adbinapp://)
+        if (value.startsWith("http://", ignoreCase = true) ||
+            value.startsWith("https://", ignoreCase = true) ||
+            value.startsWith("adbinapp://", ignoreCase = true) ||
+            value.startsWith("file://", ignoreCase = true)) {
+            return true
+        }
+        
+        // Skip if value is very short and might be a code/identifier
+        if (value.length <= 1) {
+            return true
+        }
+        
+        return false
     }
     
     /**
