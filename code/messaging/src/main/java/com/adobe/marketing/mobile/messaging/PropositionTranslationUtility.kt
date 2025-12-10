@@ -471,63 +471,82 @@ internal class PropositionTranslationUtility {
     
     /**
      * Translates HTML text while preserving HTML tags and structure.
-     * Only translates plain text segments without newlines.
+     * Uses conservative regex patterns to match only plain text inside specific HTML tags.
+     * Only translates: h1-h6, p, button, and a tags with plain text content.
+     * Does NOT touch: img tags, div containers, URLs, attributes, or any nested HTML.
      *
      * @param htmlText the HTML text to translate
      * @return the translated HTML text, or the original if translation fails
      */
     private fun translateHtmlText(htmlText: String): String {
         return try {
-            val textSegments = mutableListOf<String>()
-            val htmlSegments = mutableListOf<String>()
+            var result = htmlText
             
-            var lastEnd = 0
-            HTML_TAG_PATTERN.findAll(htmlText).forEach { matchResult ->
-                // Add text before the tag
-                if (matchResult.range.first > lastEnd) {
-                    textSegments.add(htmlText.substring(lastEnd, matchResult.range.first))
-                }
-                
-                // Add the HTML tag
-                htmlSegments.add(matchResult.value)
-                lastEnd = matchResult.range.last + 1
+            // Track translations to avoid re-translating the same text multiple times
+            val translationCache = mutableMapOf<String, String>()
+            
+            // Pattern 1: Match text inside heading tags (h1-h6)
+            // [^<]+ means "one or more characters that are not <" (plain text only)
+            val headingPattern = Regex(
+                """(<h[1-6]\b[^>]*>)([^<]+)(<\/h[1-6]>)""",
+                RegexOption.MULTILINE
+            )
+            
+            // Pattern 2: Match text inside paragraph tags
+            val paragraphPattern = Regex(
+                """(<p\b[^>]*>)([^<]+)(<\/p>)""",
+                RegexOption.MULTILINE
+            )
+            
+            // Pattern 3: Match text inside button tags
+            val buttonPattern = Regex(
+                """(<button\b[^>]*>)([^<]+)(<\/button>)""",
+                RegexOption.MULTILINE
+            )
+            
+            // Pattern 4: Match text inside anchor tags (but preserve href URLs)
+            val anchorPattern = Regex(
+                """(<a\b[^>]*>)([^<]+)(<\/a>)""",
+                RegexOption.MULTILINE
+            )
+            
+            // Translate headings
+            result = headingPattern.replace(result) { matchResult ->
+                val openingTag = matchResult.groupValues[1]
+                val textContent = matchResult.groupValues[2]
+                val closingTag = matchResult.groupValues[3]
+                val translatedContent = translateTextContent(textContent, translationCache)
+                "$openingTag$translatedContent$closingTag"
             }
             
-            // Add remaining text after the last tag
-            if (lastEnd < htmlText.length) {
-                textSegments.add(htmlText.substring(lastEnd))
+            // Translate paragraphs
+            result = paragraphPattern.replace(result) { matchResult ->
+                val openingTag = matchResult.groupValues[1]
+                val textContent = matchResult.groupValues[2]
+                val closingTag = matchResult.groupValues[3]
+                val translatedContent = translateTextContent(textContent, translationCache)
+                "$openingTag$translatedContent$closingTag"
             }
             
-            // Translate text segments (only plain text without newlines)
-            val translatedSegments = textSegments.map { segment ->
-                val trimmedSegment = segment.trim()
-                if (trimmedSegment.isNotEmpty() && !trimmedSegment.contains('\n')) {
-                    translatePlainText(trimmedSegment)
-                } else {
-                    segment // Preserve whitespace and text with newlines
-                }
+            // Translate buttons
+            result = buttonPattern.replace(result) { matchResult ->
+                val openingTag = matchResult.groupValues[1]
+                val textContent = matchResult.groupValues[2]
+                val closingTag = matchResult.groupValues[3]
+                val translatedContent = translateTextContent(textContent, translationCache)
+                "$openingTag$translatedContent$closingTag"
             }
             
-            // Reconstruct HTML with translated text
-            buildString {
-                var textIndex = 0
-                var htmlIndex = 0
-                var lastEnd = 0
-                
-                HTML_TAG_PATTERN.findAll(htmlText).forEach { matchResult ->
-                    if (matchResult.range.first > lastEnd && textIndex < translatedSegments.size) {
-                        append(translatedSegments[textIndex++])
-                    }
-                    if (htmlIndex < htmlSegments.size) {
-                        append(htmlSegments[htmlIndex++])
-                    }
-                    lastEnd = matchResult.range.last + 1
-                }
-                
-                if (textIndex < translatedSegments.size) {
-                    append(translatedSegments[textIndex])
-                }
+            // Translate anchor text
+            result = anchorPattern.replace(result) { matchResult ->
+                val openingTag = matchResult.groupValues[1]
+                val textContent = matchResult.groupValues[2]
+                val closingTag = matchResult.groupValues[3]
+                val translatedContent = translateTextContent(textContent, translationCache)
+                "$openingTag$translatedContent$closingTag"
             }
+            
+            result
         } catch (e: Exception) {
             Log.debug(
                 MessagingConstants.LOG_TAG,
@@ -536,6 +555,31 @@ internal class PropositionTranslationUtility {
             )
             htmlText
         }
+    }
+    
+    /**
+     * Translates text content, handling plain text only.
+     * Uses a cache to avoid re-translating the same text.
+     */
+    private fun translateTextContent(textContent: String, cache: MutableMap<String, String>): String {
+        val trimmedText = textContent.trim()
+        
+        // Check cache first
+        cache[trimmedText]?.let { return textContent.replace(trimmedText, it) }
+        
+        // Skip very short text (likely not user-facing)
+        if (trimmedText.length < 2) {
+            return textContent
+        }
+        
+        // Translate the text
+        val translatedText = translatePlainText(trimmedText)
+        
+        // Cache the translation
+        cache[trimmedText] = translatedText
+        
+        // Preserve original whitespace by replacing only the trimmed portion
+        return textContent.replace(trimmedText, translatedText)
     }
     
     /**
