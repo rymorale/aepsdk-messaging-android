@@ -437,20 +437,25 @@ internal class PropositionTranslationUtility {
             return true
         }
         
-        // Skip if the value looks like a URL (starts with http://, https://, or adbinapp://)
-        if (value.startsWith("http://", ignoreCase = true) ||
-            value.startsWith("https://", ignoreCase = true) ||
-            value.startsWith("adbinapp://", ignoreCase = true) ||
-            value.startsWith("file://", ignoreCase = true)) {
-            return true
-        }
-        
-        // Skip if value is very short and might be a code/identifier
-        if (value.length <= 1) {
+        // Skip if the value looks like a URL or is too short
+        if (looksLikeUrl(value) || value.length <= 1) {
             return true
         }
         
         return false
+    }
+    
+    /**
+     * Checks if a string value looks like a URL or URI.
+     *
+     * @param value the string to check
+     * @return true if the value appears to be a URL
+     */
+    private fun looksLikeUrl(value: String): Boolean {
+        return value.startsWith("http://", ignoreCase = true) ||
+               value.startsWith("https://", ignoreCase = true) ||
+               value.startsWith("adbinapp://", ignoreCase = true) ||
+               value.startsWith("file://", ignoreCase = true)
     }
     
     /**
@@ -463,7 +468,14 @@ internal class PropositionTranslationUtility {
         return list.map { item ->
             when (item) {
                 null -> null
-                is String -> translateText(item)
+                is String -> {
+                    // Skip translation for URLs and very short strings
+                    if (looksLikeUrl(item) || item.length <= 1) {
+                        item
+                    } else {
+                        translateText(item)
+                    }
+                }
                 is Map<*, *> -> translateMap(item as Map<String, Any?>)
                 is List<*> -> translateList(item as List<Any?>)
                 else -> item
