@@ -871,39 +871,8 @@ class EdgePersonalizationResponseHandler {
      *     fails or is not enabled
      */
     private Proposition translateContentCardProposition(final Proposition proposition) {
-        if (proposition == null || proposition.getItems().isEmpty()) {
-            return proposition;
-        }
-
-        try {
-            final List<PropositionItem> translatedItems = new ArrayList<>();
-            for (final PropositionItem item : proposition.getItems()) {
-                // Translate the proposition item (handles nested maps like title.content, body.content)
-                final PropositionItem translatedItem = translationManager.translatePropositionItem(item);
-                translatedItems.add(translatedItem != null ? translatedItem : item);
-            }
-
-            // Create a new Proposition with translated items
-            return new Proposition(
-                    proposition.getUniqueId(),
-                    proposition.getScope(),
-                    proposition.getScopeDetails(),
-                    translatedItems);
-        } catch (final MessageRequiredFieldMissingException e) {
-            Log.warning(
-                    MessagingConstants.LOG_TAG,
-                    SELF_TAG,
-                    "Failed to create translated content card proposition, required field missing: %s",
-                    e.getLocalizedMessage());
-            return proposition;
-        } catch (final Exception e) {
-            Log.warning(
-                    MessagingConstants.LOG_TAG,
-                    SELF_TAG,
-                    "Failed to translate content card proposition: %s",
-                    e.getLocalizedMessage());
-            return proposition;
-        }
+        final Proposition translatedProposition = translationManager.translateProposition(proposition);
+        return translatedProposition != null ? translatedProposition : proposition;
     }
 
     /**
@@ -1056,8 +1025,6 @@ class EdgePersonalizationResponseHandler {
     
     /**
      * Translates code-based experience propositions from English to the device's native language.
-     * Only translates propositions with HTML_CONTENT or JSON_CONTENT schema types.
-     * Other proposition types (INAPP, CONTENT_CARD) are handled separately and returned unchanged.
      *
      * @param proposition the {@link Proposition} to translate
      * @return a new {@link Proposition} with translated content, or the original if translation
@@ -1075,35 +1042,8 @@ class EdgePersonalizationResponseHandler {
             return proposition;
         }
 
-        try {
-            final List<PropositionItem> translatedItems = new ArrayList<>();
-            for (final PropositionItem item : proposition.getItems()) {
-                // Translate the proposition item
-                final PropositionItem translatedItem = translationManager.translatePropositionItem(item);
-                translatedItems.add(translatedItem != null ? translatedItem : item);
-            }
-
-            // Create a new Proposition with translated items
-            return new Proposition(
-                    proposition.getUniqueId(),
-                    proposition.getScope(),
-                    proposition.getScopeDetails(),
-                    translatedItems);
-        } catch (final MessageRequiredFieldMissingException e) {
-            Log.warning(
-                    MessagingConstants.LOG_TAG,
-                    SELF_TAG,
-                    "Failed to create translated code-based experience proposition, required field missing: %s",
-                    e.getLocalizedMessage());
-            return proposition;
-        } catch (final Exception e) {
-            Log.warning(
-                    MessagingConstants.LOG_TAG,
-                    SELF_TAG,
-                    "Failed to translate code-based experience proposition: %s",
-                    e.getLocalizedMessage());
-            return proposition;
-        }
+        final Proposition translatedProposition = translationManager.translateProposition(proposition);
+        return translatedProposition != null ? translatedProposition : proposition;
     }
 
     /**

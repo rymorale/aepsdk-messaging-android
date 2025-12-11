@@ -183,6 +183,52 @@ internal class PropositionTranslationManager {
         else translationUtility?.translatePropositionItem(propositionItem) ?: propositionItem
     
     /**
+     * Translates all proposition items in a single proposition.
+     *
+     * @param proposition the [Proposition] to translate
+     * @return a new [Proposition] with translated content, or the original if
+     *     translation is disabled, fails, or input is null/empty
+     */
+    fun translateProposition(proposition: Proposition?): Proposition? {
+        if (proposition == null || !isTranslationEnabled || translationUtility == null) {
+            return proposition
+        }
+        
+        if (proposition.items.isEmpty()) {
+            return proposition
+        }
+        
+        return try {
+            val translatedItems = proposition.items.map { item ->
+                translationUtility?.translatePropositionItem(item) ?: item
+            }
+            
+            // Create a new proposition with translated items
+            Proposition(
+                proposition.uniqueId,
+                proposition.scope,
+                proposition.scopeDetails,
+                translatedItems
+            )
+        } catch (e: MessageRequiredFieldMissingException) {
+            Log.warning(
+                MessagingConstants.LOG_TAG,
+                SELF_TAG,
+                "Failed to create translated proposition: ${e.localizedMessage}"
+            )
+            // If translation fails, use the original proposition
+            proposition
+        } catch (e: Exception) {
+            Log.warning(
+                MessagingConstants.LOG_TAG,
+                SELF_TAG,
+                "Failed to translate proposition: ${e.localizedMessage}"
+            )
+            proposition
+        }
+    }
+    
+    /**
      * Translates all proposition items in a list of propositions.
      *
      * @param propositions the list of [Proposition]s to translate
@@ -194,27 +240,7 @@ internal class PropositionTranslationManager {
         }
         
         return propositions.map { proposition ->
-            try {
-                val translatedItems = proposition.items.map { item ->
-                    translationUtility?.translatePropositionItem(item) ?: item
-                }
-                
-                // Create a new proposition with translated items
-                Proposition(
-                    proposition.uniqueId,
-                    proposition.scope,
-                    proposition.scopeDetails,
-                    translatedItems
-                )
-            } catch (e: MessageRequiredFieldMissingException) {
-                Log.warning(
-                    MessagingConstants.LOG_TAG,
-                    SELF_TAG,
-                    "Failed to create translated proposition: ${e.localizedMessage}"
-                )
-                // If translation fails, use the original proposition
-                proposition
-            }
+            translateProposition(proposition) ?: proposition
         }
     }
     
