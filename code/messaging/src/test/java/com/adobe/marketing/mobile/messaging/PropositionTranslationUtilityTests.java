@@ -59,10 +59,13 @@ public class PropositionTranslationUtilityTests {
             when(mockDeviceInfoService.getActiveLocale()).thenReturn(Locale.ENGLISH);
 
             // Test
-            boolean result = translationUtility.initialize();
+            PropositionTranslationUtility.InitializationResult result =
+                    translationUtility.initialize(null);
 
             // Verify
-            assertFalse(result);
+            assertEquals(
+                    PropositionTranslationUtility.InitializationStatus.FAILED_ENGLISH_LOCALE,
+                    result.getStatus());
             assertFalse(translationUtility.isTranslationEnabled());
             assertNull(translationUtility.getTargetLanguageCode());
         }
@@ -80,10 +83,20 @@ public class PropositionTranslationUtilityTests {
             when(mockDeviceInfoService.getActiveLocale()).thenReturn(null);
 
             // Test
-            boolean result = translationUtility.initialize();
+            PropositionTranslationUtility.InitializationResult result =
+                    translationUtility.initialize(null);
 
-            // Verify
-            assertFalse(result);
+            // Verify - when system locale is null, app locale is used; either way translation
+            // should not be enabled (either FAILED_NO_LOCALE or e.g. FAILED_ENGLISH_LOCALE)
+            assertNotNull(result.getStatus());
+            assertFalse(
+                    result.getStatus()
+                            == PropositionTranslationUtility.InitializationStatus
+                                    .SUCCESS_MODEL_CACHED);
+            assertFalse(
+                    result.getStatus()
+                            == PropositionTranslationUtility.InitializationStatus
+                                    .SUCCESS_MODEL_DOWNLOADED);
             assertFalse(translationUtility.isTranslationEnabled());
         }
     }

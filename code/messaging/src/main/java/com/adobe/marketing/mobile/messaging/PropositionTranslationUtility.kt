@@ -38,6 +38,28 @@ internal class PropositionTranslationUtility {
         
         // HTML tag pattern to preserve HTML structure during translation
         private val HTML_TAG_PATTERN = Regex("<[^>]+>")
+        
+        // Token format used when tokenizing HTML (e.g. $$T1$$, $$T2$$, ...)
+        private const val TOKEN_PREFIX = "\$\$T"
+        private const val TOKEN_SUFFIX = "\$\$"
+        private const val PRESERVED_BLOCK_PLACEHOLDER = "<!--PRESERVED_BLOCK_"
+        private const val PRESERVED_BLOCK_SUFFIX = "-->"
+        
+        // Regex for preserving style/script blocks (dot matches newlines)
+        private val STYLE_BLOCK_PATTERN = Regex(
+            "<style[^>]*>.*?</style>",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+        private val SCRIPT_BLOCK_PATTERN = Regex(
+            "<script[^>]*>.*?</script>",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+        )
+        // Text between tags: >...<
+        private val TEXT_BETWEEN_TAGS_PATTERN = Regex(">([^<]+)<")
+        // Attribute patterns: alt="...", title="...", placeholder="..."
+        private val ALT_ATTR_PATTERN = Regex("""alt\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+        private val TITLE_ATTR_PATTERN = Regex("""title\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+        private val PLACEHOLDER_ATTR_PATTERN = Regex("""placeholder\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
     }
     
     /**
@@ -531,83 +553,22 @@ internal class PropositionTranslationUtility {
     }
     
     /**
-     * Translates HTML text while preserving HTML tags and structure.
-     * Uses conservative regex patterns to match only plain text inside specific HTML tags.
-     * Only translates: h1-h6, p, button, and a tags with plain text content.
-     * Does NOT touch: img tags, div containers, URLs, attributes, or any nested HTML.
+     * Translates HTML text using tokenization.
+     * Extracts all visible text (between tags, alt, title, placeholder), tokenizes it,
+     * translates each token, then replaces tokens with translated text.
+     * Preserves &lt;style&gt; and &lt;script&gt; blocks from being tokenized or translated.
      *
      * @param htmlText the HTML text to translate
      * @return the translated HTML text, or the original if translation fails
      */
     private fun translateHtmlText(htmlText: String): String {
         return try {
-            var result = htmlText
-            
-            // Track translations to avoid re-translating the same text multiple times
-            val translationCache = mutableMapOf<String, String>()
-            
-            // Pattern 1: Match text inside heading tags (h1-h6)
-            // [^<]+ means "one or more characters that are not <" (plain text only)
-            val headingPattern = Regex(
-                """(<h[1-6]\b[^>]*>)([^<]+)(<\/h[1-6]>)""",
-                RegexOption.MULTILINE
-            )
-            
-            // Pattern 2: Match text inside paragraph tags
-            val paragraphPattern = Regex(
-                """(<p\b[^>]*>)([^<]+)(<\/p>)""",
-                RegexOption.MULTILINE
-            )
-            
-            // Pattern 3: Match text inside button tags
-            val buttonPattern = Regex(
-                """(<button\b[^>]*>)([^<]+)(<\/button>)""",
-                RegexOption.MULTILINE
-            )
-            
-            // Pattern 4: Match text inside anchor tags (but preserve href URLs)
-            val anchorPattern = Regex(
-                """(<a\b[^>]*>)([^<]+)(<\/a>)""",
-                RegexOption.MULTILINE
-            )
-            
-            // Translate headings
-            result = headingPattern.replace(result) { matchResult ->
-                val openingTag = matchResult.groupValues[1]
-                val textContent = matchResult.groupValues[2]
-                val closingTag = matchResult.groupValues[3]
-                val translatedContent = translateTextContent(textContent, translationCache)
-                "$openingTag$translatedContent$closingTag"
+            val (tokenizedHTML, tokenMap) = tokenizeHTMLText(htmlText)
+            if (tokenMap.isEmpty()) {
+                return htmlText
             }
-            
-            // Translate paragraphs
-            result = paragraphPattern.replace(result) { matchResult ->
-                val openingTag = matchResult.groupValues[1]
-                val textContent = matchResult.groupValues[2]
-                val closingTag = matchResult.groupValues[3]
-                val translatedContent = translateTextContent(textContent, translationCache)
-                "$openingTag$translatedContent$closingTag"
-            }
-            
-            // Translate buttons
-            result = buttonPattern.replace(result) { matchResult ->
-                val openingTag = matchResult.groupValues[1]
-                val textContent = matchResult.groupValues[2]
-                val closingTag = matchResult.groupValues[3]
-                val translatedContent = translateTextContent(textContent, translationCache)
-                "$openingTag$translatedContent$closingTag"
-            }
-            
-            // Translate anchor text
-            result = anchorPattern.replace(result) { matchResult ->
-                val openingTag = matchResult.groupValues[1]
-                val textContent = matchResult.groupValues[2]
-                val closingTag = matchResult.groupValues[3]
-                val translatedContent = translateTextContent(textContent, translationCache)
-                "$openingTag$translatedContent$closingTag"
-            }
-            
-            result
+            val translatedMap = translateTokenMap(tokenMap)
+            replaceTokens(tokenizedHTML, translatedMap)
         } catch (e: Exception) {
             Log.debug(
                 MessagingConstants.LOG_TAG,
@@ -619,28 +580,100 @@ internal class PropositionTranslationUtility {
     }
     
     /**
-     * Translates text content, handling plain text only.
-     * Uses a cache to avoid re-translating the same text.
+     * Extracts visible text from HTML, tokenizes it, and returns tokenized HTML with token map.
+     * Preserves style/script blocks, then tokenizes text between tags and
+     * alt/title/placeholder attributes. Tokens use format $$T1$$, $$T2$$, ...
+     *
+     * @param html the raw HTML string
+     * @return Pair of (tokenizedHTML with placeholders, map of token -> original text)
      */
-    private fun translateTextContent(textContent: String, cache: MutableMap<String, String>): String {
-        val trimmedText = textContent.trim()
+    private fun tokenizeHTMLText(html: String): Pair<String, Map<String, String>> {
+        var tokenizedHTML = html
+        val tokenMap = mutableMapOf<String, String>()
+        var tokenCounter = 1
         
-        // Check cache first
-        cache[trimmedText]?.let { return textContent.replace(trimmedText, it) }
+        // Step 1: Extract and replace <style> and <script> blocks so we don't tokenize code
+        val preservedBlocks = mutableMapOf<String, String>()
+        var blockCounter = 1
         
-        // Skip very short text (likely not user-facing)
-        if (trimmedText.length < 2) {
-            return textContent
+        STYLE_BLOCK_PATTERN.findAll(tokenizedHTML).toList().reversed().forEach { match ->
+            val styleBlock = match.value
+            val placeholder = "$PRESERVED_BLOCK_PLACEHOLDER$blockCounter$PRESERVED_BLOCK_SUFFIX"
+            preservedBlocks[placeholder] = styleBlock
+            blockCounter++
+            tokenizedHTML = tokenizedHTML.replaceRange(match.range, placeholder)
         }
         
-        // Translate the text
-        val translatedText = translatePlainText(trimmedText)
+        SCRIPT_BLOCK_PATTERN.findAll(tokenizedHTML).toList().reversed().forEach { match ->
+            val scriptBlock = match.value
+            val placeholder = "$PRESERVED_BLOCK_PLACEHOLDER$blockCounter$PRESERVED_BLOCK_SUFFIX"
+            preservedBlocks[placeholder] = scriptBlock
+            blockCounter++
+            tokenizedHTML = tokenizedHTML.replaceRange(match.range, placeholder)
+        }
         
-        // Cache the translation
-        cache[trimmedText] = translatedText
+        // Helper: create token for text and update map (skip empty/whitespace-only)
+        fun createToken(text: String, originalInDocument: String): String {
+            val trimmed = text.trim()
+            if (trimmed.isEmpty()) return originalInDocument
+            val token = "$TOKEN_PREFIX${tokenCounter}$TOKEN_SUFFIX"
+            tokenMap[token] = trimmed
+            tokenCounter++
+            return token
+        }
         
-        // Preserve original whitespace by replacing only the trimmed portion
-        return textContent.replace(trimmedText, translatedText)
+        // Helper: collect (range of group 1, replacement token) then replace from end to start
+        fun tokenizeWithPattern(pattern: Regex, getReplacement: (String) -> String) {
+            val group1RangesAndReplacements = pattern.findAll(tokenizedHTML).map { match ->
+                val group1 = match.groups[1] ?: return@map null
+                val text = group1.value
+                val replacement = getReplacement(text)
+                if (replacement == text) null else group1.range to replacement
+            }.filterNotNull().toList()
+            // Replace from end to start so indices remain valid
+            group1RangesAndReplacements.sortedByDescending { it.first.first }.forEach { (range, replacement) ->
+                tokenizedHTML = tokenizedHTML.replaceRange(range, replacement)
+            }
+        }
+        
+        // Process text between tags
+        tokenizeWithPattern(TEXT_BETWEEN_TAGS_PATTERN) { text ->
+            if (text.trim().isEmpty()) text else createToken(text, text)
+        }
+        
+        // Process alt, title, placeholder attributes
+        tokenizeWithPattern(ALT_ATTR_PATTERN) { text -> createToken(text, text) }
+        tokenizeWithPattern(TITLE_ATTR_PATTERN) { text -> createToken(text, text) }
+        tokenizeWithPattern(PLACEHOLDER_ATTR_PATTERN) { text -> createToken(text, text) }
+        
+        // Step 2: Restore preserved <style> and <script> blocks
+        for ((placeholder, originalBlock) in preservedBlocks) {
+            tokenizedHTML = tokenizedHTML.replace(placeholder, originalBlock)
+        }
+        
+        return tokenizedHTML to tokenMap
+    }
+    
+    /**
+     * Translates each value in the token map. Skips empty or very short text.
+     * Keeps original text if translation fails.
+     */
+    private fun translateTokenMap(tokenMap: Map<String, String>): Map<String, String> {
+        return tokenMap.mapValues { (_, originalText) ->
+            if (originalText.length < 2) originalText
+            else translatePlainText(originalText)
+        }
+    }
+    
+    /**
+     * Replaces tokens in HTML with their translated values.
+     */
+    private fun replaceTokens(html: String, translatedMap: Map<String, String>): String {
+        var result = html
+        for ((token, translatedText) in translatedMap) {
+            result = result.replace(token, translatedText)
+        }
+        return result
     }
     
     /**
